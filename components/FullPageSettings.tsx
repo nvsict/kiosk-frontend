@@ -77,7 +77,7 @@ const FullPageSettings = forwardRef<PrintSettingsHandle, FullPageSettingsProps>(
       canvas.height = scaledViewport.height;
       canvas.width = scaledViewport.width;
 
-      await page.render({ canvasContext: context, viewport: scaledViewport }).promise;
+      await page.render({ canvasContext: context, viewport: scaledViewport } as any).promise;
       return canvas.toDataURL("image/jpeg", 0.8);
     } catch (err) {
       console.warn("Could not generate PDF thumbnail", err);
