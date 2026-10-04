@@ -32,7 +32,9 @@ const MARGIN = 5;
 const MIN_MM = 25;
 const DEFAULT_MM = 85.6; // ID Card size default
 const GAP = 12;
-const MAX_EDGE = 3200;
+
+// REDUCED MAX_EDGE for much faster processing on mobile phones (1500px is plenty for ID cards at 300 DPI)
+const MAX_EDGE = 1500; 
 const CARD_ASPECT = 85.6 / 54;
 
 type SideKey = "front" | "back";
@@ -86,11 +88,11 @@ interface ImageSettingsProps {
   frontFile: File;
   backFile?: File | null;
   onUpdate: (data: PrintSettingsUpdate) => void;
-  pricing?: { bw: number; color: number }; // <-- Added pricing prop
+  pricing?: { bw: number; color: number };
 }
 
 const ImageSettings = forwardRef<PrintSettingsHandle, ImageSettingsProps>(function ImageSettings(
-  { frontFile, backFile = null, onUpdate, pricing }, // <-- Extract pricing
+  { frontFile, backFile = null, onUpdate, pricing },
   ref
 ) {
   // print options
@@ -194,10 +196,8 @@ const ImageSettings = forwardRef<PrintSettingsHandle, ImageSettingsProps>(functi
   const updateSide = (k: SideKey, fn: (s: Side) => Side) => (k === "front" ? setFront : setBack)((s) => (s ? fn(s) : s));
 
   /* ----- report state ----- */
-  /* ----- report state ----- */
   const isValid = !!front && !loading && !busy;
   useEffect(() => {
-    // Calculate total using dynamic pricing or fallback to standard rates
     const rate = colorMode === "Color" ? (pricing?.color ?? 10.0) : (pricing?.bw ?? 2.0);
     
     onUpdate({
@@ -205,10 +205,10 @@ const ImageSettings = forwardRef<PrintSettingsHandle, ImageSettingsProps>(functi
       colorMode,
       isDuplex: false,
       totalPages: 1,
-      totalAmount: 1 * copies * rate, // <-- Use dynamic rate
+      totalAmount: 1 * copies * rate,
       isValid,
     });
-  }, [copies, colorMode, isValid, onUpdate, pricing]); // <-- Add pricing to dependencies
+  }, [copies, colorMode, isValid, onUpdate, pricing]);
 
   /* ----- actions ----- */
   const handleBackPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -227,9 +227,13 @@ const ImageSettings = forwardRef<PrintSettingsHandle, ImageSettingsProps>(functi
     setBusy("Adding back side…");
     try {
       const s = await loadSide(file);
-      // Inherit width from front if possible
       s.mm = front.mm; 
-      setBack(place(s, front.y + heightMm(front) + GAP));
+      // Ensure the back side spawns safely below the front side
+      let newY = front.y + heightMm(front) + GAP;
+      if (newY + heightMm(s) > A4_H - MARGIN) {
+          newY = MARGIN; // If it goes off the bottom, spawn at the top
+      }
+      setBack(place(s, newY));
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Could not open this image.");
     } finally {
@@ -245,7 +249,7 @@ const ImageSettings = forwardRef<PrintSettingsHandle, ImageSettingsProps>(functi
     if (back) setBack((s) => (s ? clampSide({ ...s, mm }) : s));
   };
 
-  /* ----- Edit Modal (Combined Crop & Rotate) ----- */
+  /* ----- Edit Modal ----- */
   const openEditModal = (key: SideKey) => {
     const s = sideOf(key);
     if (!s) return;
@@ -253,7 +257,7 @@ const ImageSettings = forwardRef<PrintSettingsHandle, ImageSettingsProps>(functi
     setModalRot(s.rot);
     setModalRotatedSrc(s.rotated);
     setModalCrop(undefined);
-    setModalMode("card"); // Default to card aspect ratio to guide users
+    setModalMode("card");
   };
 
   const handleModalRotate = async () => {
@@ -266,7 +270,7 @@ const ImageSettings = forwardRef<PrintSettingsHandle, ImageSettingsProps>(functi
       track(t.url);
       setModalRot(newRot);
       setModalRotatedSrc(t.url);
-      setModalCrop(undefined); // Reset crop box after rotation
+      setModalCrop(undefined);
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Could not rotate this image.");
     } finally {
@@ -292,7 +296,6 @@ const ImageSettings = forwardRef<PrintSettingsHandle, ImageSettingsProps>(functi
     const img = imgRef.current;
     
     if (!s || !modalCrop || modalCrop.width < 2 || modalCrop.height < 2) {
-      // User just rotated, didn't crop.
       updateSide(editTarget, (cur) => clampSide({ ...cur, rot: modalRot, rotated: modalRotatedSrc, src: modalRotatedSrc, w: img.naturalWidth, h: img.naturalHeight, rw: img.naturalWidth, rh: img.naturalHeight }));
       setEditTarget(null);
       return;
@@ -371,34 +374,48 @@ const ImageSettings = forwardRef<PrintSettingsHandle, ImageSettingsProps>(functi
         bounds="parent"
         minWidth={MIN_MM * scale}
         enableResizing={{ bottomRight: true, top: false, right: false, bottom: false, left: false, topRight: false, topLeft: false, bottomLeft: false }}
-        resizeHandleComponent={{ bottomRight: (<div className="absolute -right-2 -bottom-2 w-6 h-6 rounded-full bg-blue-600 border-2 border-white shadow-md flex items-center justify-center opacity-70 hover:opacity-100"><div className="w-2 h-2 bg-white rounded-full pointer-events-none"/></div>) }}
+        resizeHandleComponent={{ bottomRight: (<div className="absolute -right-3 -bottom-3 w-8 h-8 rounded-full bg-blue-600 border-2 border-white shadow-md flex items-center justify-center opacity-90 hover:opacity-100 z-20"><div className="w-2.5 h-2.5 bg-white rounded-full pointer-events-none"/></div>) }}
         onDragStop={(_e, d) => updateSide(key, (cur) => clampSide({ ...cur, x: d.x / scale, y: d.y / scale }))}
         onResizeStop={(_e, _dir, el, _delta, pos) => {
           updateSide(key, (cur) => clampSide({ ...cur, mm: el.offsetWidth / scale, x: pos.x / scale, y: pos.y / scale }));
           setSizePreset("custom"); 
         }}
+        // STOP propagation on drag handle so buttons work
+        dragHandleClassName="drag-handle"
         style={{ touchAction: "none" }}
-        className="group cursor-move bg-white border border-dashed border-gray-400 hover:border-blue-500 hover:shadow-lg transition-shadow duration-200"
+        className="group absolute bg-white border-2 border-dashed border-gray-400 focus-within:border-blue-500 hover:border-blue-500 shadow-md hover:shadow-lg transition-shadow duration-200 z-10"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={s.src} alt={`${key} side`} draggable={false} style={filterStyle} className="w-full h-full block select-none pointer-events-none" />
+        {/* The draggable area */}
+        <div className="drag-handle w-full h-full cursor-move">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={s.src} alt={`${key} side`} draggable={false} style={filterStyle} className="w-full h-full block select-none pointer-events-none" />
+        </div>
         
-        <span className="absolute -top-2.5 -left-1 text-[10px] font-bold bg-white text-gray-700 px-2 py-0.5 rounded-full shadow-sm border border-gray-200 pointer-events-none z-10">
+        <span className="absolute -top-3 -left-2 text-[10px] font-bold bg-white text-gray-700 px-2 py-0.5 rounded-full shadow-sm border border-gray-200 pointer-events-none z-10">
           {key === "front" ? "Front" : "Back"}
         </span>
 
-        {/* Floating Contextual Toolbar */}
+        {/* Floating Contextual Toolbar - Made always visible on mobile, no pointer-events hijacking */}
         <div 
-          className="absolute -top-3 -right-3 flex space-x-1.5 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+          className="absolute -top-4 -right-4 flex space-x-2 z-30"
           onMouseDown={(e) => e.stopPropagation()} 
           onTouchStart={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
         >
-          <button type="button" onClick={() => openEditModal(key)} className="w-8 h-8 bg-blue-600 text-white rounded-full shadow-md flex items-center justify-center hover:bg-blue-700 active:scale-95 transition-transform">
-            <Edit2 className="w-4 h-4" />
+          <button 
+            type="button" 
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); openEditModal(key); }} 
+            className="w-10 h-10 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-blue-700 active:scale-90 transition-transform cursor-pointer"
+          >
+            <Edit2 className="w-5 h-5" />
           </button>
           {key === "back" && (
-            <button type="button" onClick={removeBack} className="w-8 h-8 bg-red-500 text-white rounded-full shadow-md flex items-center justify-center hover:bg-red-600 active:scale-95 transition-transform">
-              <Trash2 className="w-4 h-4" />
+            <button 
+                type="button" 
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeBack(); }} 
+                className="w-10 h-10 bg-red-500 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-red-600 active:scale-90 transition-transform cursor-pointer"
+            >
+              <Trash2 className="w-5 h-5" />
             </button>
           )}
         </div>
@@ -423,35 +440,35 @@ const ImageSettings = forwardRef<PrintSettingsHandle, ImageSettingsProps>(functi
             <div className="absolute border border-dashed border-gray-200 pointer-events-none" style={{ inset: MARGIN * scale }} />
             
             {loading && (
-              <div className="absolute inset-0 flex items-center justify-center text-sm font-medium text-gray-500">
+              <div className="absolute inset-0 flex items-center justify-center text-sm font-medium text-gray-500 z-50 bg-white/50">
                 <Loader2 className="w-5 h-5 mr-2 animate-spin text-blue-500" /> Processing…
               </div>
             )}
             
-            {front && renderBox("front", front)}
-            {back && renderBox("back", back)}
+            {!loading && front && renderBox("front", front)}
+            {!loading && back && renderBox("back", back)}
 
             {/* Inline Add Back Side Box */}
             {front && !back && !loading && (
               <div 
                 onClick={() => backInputRef.current?.click()}
-                className="absolute border-2 border-dashed border-gray-300 bg-gray-50/50 hover:bg-blue-50 hover:border-blue-400 rounded-lg flex flex-col items-center justify-center cursor-pointer transition-colors"
+                className="absolute border-2 border-dashed border-gray-300 bg-gray-50/50 hover:bg-blue-50 hover:border-blue-400 rounded-lg flex flex-col items-center justify-center cursor-pointer transition-colors z-0"
                 style={{ 
                   width: front.mm * scale, 
                   height: heightMm(front) * scale,
                   left: front.x * scale, 
-                  top: (front.y + heightMm(front) + GAP) * scale 
+                  top: Math.min((front.y + heightMm(front) + GAP) * scale, (A4_H - MARGIN - heightMm(front)) * scale) 
                 }}
               >
-                <Plus className="w-6 h-6 text-gray-400 mb-1" />
-                <span className="text-[10px] font-bold text-gray-500 uppercase">Add Back</span>
+                <Plus className="w-6 h-6 text-gray-400 mb-1 pointer-events-none" />
+                <span className="text-[10px] font-bold text-gray-500 uppercase pointer-events-none">Add Back</span>
               </div>
             )}
 
-            <span className="absolute bottom-1 right-2 text-[9px] text-gray-300 font-bold select-none pointer-events-none tracking-widest">A4</span>
+            <span className="absolute bottom-1 right-2 text-[9px] text-gray-300 font-bold select-none pointer-events-none tracking-widest z-0">A4</span>
             
             {busy && (
-              <div className="absolute inset-0 z-30 bg-white/80 backdrop-blur-sm flex items-center justify-center text-sm font-bold text-blue-600">
+              <div className="absolute inset-0 z-40 bg-white/80 backdrop-blur-sm flex items-center justify-center text-sm font-bold text-blue-600">
                 <Loader2 className="w-5 h-5 mr-2 animate-spin" /> {busy}
               </div>
             )}
@@ -533,7 +550,7 @@ const ImageSettings = forwardRef<PrintSettingsHandle, ImageSettingsProps>(functi
         copies={copies} 
         onColorMode={setColorMode} 
         onCopies={setCopies} 
-        pricing={pricing} // <-- Pass pricing down to the UI
+        pricing={pricing}
       />
 
       {/* EDIT MODAL (Crop & Rotate combined) */}
