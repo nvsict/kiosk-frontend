@@ -5,7 +5,7 @@
 
 import type { ReactNode } from "react";
 import { AlertCircle, AlertTriangle, Info, Minus, Plus } from "lucide-react";
-import { MAX_COPIES, RATE_PER_PAGE, type ColorMode } from "../utils/printLogic";
+import { MAX_COPIES, type ColorMode } from "../utils/printLogic";
 
 export function SectionTitle({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
@@ -106,17 +106,19 @@ export function CopiesStepper({ value, onChange }: { value: number; onChange: (v
   );
 }
 
-/** Color mode + copies, identical on every screen. */
+/** Color mode + copies, identical on every screen. Now accepts dynamic pricing from the shop's agent. */
 export function CommonPrintOptions({
   colorMode,
   copies,
   onColorMode,
   onCopies,
+  pricing = { bw: 2.0, color: 10.0 } // Default fallback
 }: {
   colorMode: ColorMode;
   copies: number;
   onColorMode: (v: ColorMode) => void;
   onCopies: (v: number) => void;
+  pricing?: { bw: number; color: number };
 }) {
   return (
     <div className="space-y-6">
@@ -126,8 +128,8 @@ export function CommonPrintOptions({
           value={colorMode}
           onChange={onColorMode}
           options={[
-            { value: "B&W", label: "Black & White", sub: `₹${RATE_PER_PAGE["B&W"]} per page` },
-            { value: "Color", label: "Color", sub: `₹${RATE_PER_PAGE.Color} per page` },
+            { value: "B&W", label: "Black & White", sub: `₹${pricing.bw} per page` },
+            { value: "Color", label: "Color", sub: `₹${pricing.color} per page` },
           ]}
         />
       </div>

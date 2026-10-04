@@ -82,6 +82,13 @@ export default function CSCPrintPage({ params }: { params: Promise<{ slug: strin
   const [print, setPrint] = useState<PrintSettingsUpdate>(INITIAL_PRINT);
   const [receipt, setReceipt] = useState<{ orderId: string; amount: number; copies: number } | null>(null);
 
+  // Live Shop Settings
+  const [shopSettings, setShopSettings] = useState<{
+    bwRate: number;
+    colorRate: number;
+    duplexSupported: boolean;
+  } | null>(null);
+
   const settingsRef = useRef<PrintSettingsHandle>(null);
   const idCounter = useRef(0);
   const idInputRef = useRef<HTMLInputElement>(null);
@@ -95,6 +102,22 @@ export default function CSCPrintPage({ params }: { params: Promise<{ slug: strin
     previewUrlRef.current = undefined;
     setPrepared(null);
   }, []);
+
+  // Fetch shop settings on load
+  useEffect(() => {
+    fetch(`${API_BASE}/api/csc/${cscSlug}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.active) {
+          setShopSettings({
+            bwRate: data.pricing?.["B&W"] ?? 2.0,
+            colorRate: data.pricing?.Color ?? 10.0,
+            duplexSupported: data.duplex_supported ?? true
+          });
+        }
+      })
+      .catch(err => console.error("Could not fetch shop settings", err));
+  }, [cscSlug]);
 
   useEffect(
     () => () => {
@@ -264,7 +287,6 @@ export default function CSCPrintPage({ params }: { params: Promise<{ slug: strin
             
             <div className="space-y-4">
               
-              {/* Soft styled button for ID Card */}
               <button 
                 type="button" 
                 onClick={() => idInputRef.current?.click()} 
@@ -280,7 +302,6 @@ export default function CSCPrintPage({ params }: { params: Promise<{ slug: strin
                 <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-blue-500 transition-colors" strokeWidth={2.5} />
               </button>
 
-              {/* Soft styled button for Full Document */}
               <button 
                 type="button" 
                 onClick={() => docInputRef.current?.click()} 
@@ -319,6 +340,7 @@ export default function CSCPrintPage({ params }: { params: Promise<{ slug: strin
                 frontFile={files[0].file}
                 backFile={files[1]?.file ?? null}
                 onUpdate={handleSettingsUpdate}
+                pricing={shopSettings ? { bw: shopSettings.bwRate, color: shopSettings.colorRate } : undefined}
               />
             ) : (
               <FullPageSettings
@@ -327,6 +349,8 @@ export default function CSCPrintPage({ params }: { params: Promise<{ slug: strin
                 onRemove={removeFile}
                 onAddMore={() => docInputRef.current?.click()}
                 onUpdate={handleSettingsUpdate}
+                pricing={shopSettings ? { bw: shopSettings.bwRate, color: shopSettings.colorRate } : undefined}
+                isDuplexEnabledByOperator={shopSettings?.duplexSupported ?? true}
               />
             )}
 

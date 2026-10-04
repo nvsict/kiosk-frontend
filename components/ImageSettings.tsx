@@ -86,10 +86,11 @@ interface ImageSettingsProps {
   frontFile: File;
   backFile?: File | null;
   onUpdate: (data: PrintSettingsUpdate) => void;
+  pricing?: { bw: number; color: number }; // <-- Added pricing prop
 }
 
 const ImageSettings = forwardRef<PrintSettingsHandle, ImageSettingsProps>(function ImageSettings(
-  { frontFile, backFile = null, onUpdate },
+  { frontFile, backFile = null, onUpdate, pricing }, // <-- Extract pricing
   ref
 ) {
   // print options
@@ -193,17 +194,21 @@ const ImageSettings = forwardRef<PrintSettingsHandle, ImageSettingsProps>(functi
   const updateSide = (k: SideKey, fn: (s: Side) => Side) => (k === "front" ? setFront : setBack)((s) => (s ? fn(s) : s));
 
   /* ----- report state ----- */
+  /* ----- report state ----- */
   const isValid = !!front && !loading && !busy;
   useEffect(() => {
+    // Calculate total using dynamic pricing or fallback to standard rates
+    const rate = colorMode === "Color" ? (pricing?.color ?? 10.0) : (pricing?.bw ?? 2.0);
+    
     onUpdate({
       copies,
       colorMode,
       isDuplex: false,
       totalPages: 1,
-      totalAmount: calculatePrintPrice({ pages: 1, copies, colorMode }),
+      totalAmount: 1 * copies * rate, // <-- Use dynamic rate
       isValid,
     });
-  }, [copies, colorMode, isValid, onUpdate]);
+  }, [copies, colorMode, isValid, onUpdate, pricing]); // <-- Add pricing to dependencies
 
   /* ----- actions ----- */
   const handleBackPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -523,7 +528,13 @@ const ImageSettings = forwardRef<PrintSettingsHandle, ImageSettingsProps>(functi
         Print thin cutting border around card
       </label>
 
-      <CommonPrintOptions colorMode={colorMode} copies={copies} onColorMode={setColorMode} onCopies={setCopies} />
+      <CommonPrintOptions 
+        colorMode={colorMode} 
+        copies={copies} 
+        onColorMode={setColorMode} 
+        onCopies={setCopies} 
+        pricing={pricing} // <-- Pass pricing down to the UI
+      />
 
       {/* EDIT MODAL (Crop & Rotate combined) */}
       {editTarget && (
