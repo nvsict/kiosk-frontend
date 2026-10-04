@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle, ChevronRight, CreditCard, FileText, Loader2, Printer } from "lucide-react";
+import { ArrowLeft, CheckCircle, ChevronRight, CreditCard, FileText, Loader2, Printer, UploadCloud } from "lucide-react";
 import ImageSettings from "../../../components/ImageSettings";
 import FullPageSettings from "../../../components/FullPageSettings";
 import { Banner } from "../../../components/PrintControls";
@@ -17,8 +17,6 @@ import {
   type PrintSettingsUpdate,
 } from "../../../utils/printLogic";
 
-// On a customer's phone "localhost" is the phone itself. Set NEXT_PUBLIC_API_URL
-// (e.g. https://api.yourdomain.com or http://192.168.1.10:8000) in .env.local for real use.
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const UPLOAD_URL = `${API_BASE}/api/orders/upload`;
 
@@ -36,7 +34,6 @@ const INITIAL_PRINT: PrintSettingsUpdate = {
   isValid: false,
 };
 
-/** Upload with real progress (fetch cannot report upload progress). */
 function uploadOrder(
   body: FormData,
   onProgress: (pct: number) => void
@@ -91,10 +88,8 @@ export default function CSCPrintPage({ params }: { params: Promise<{ slug: strin
   const docInputRef = useRef<HTMLInputElement>(null);
   const previewUrlRef = useRef<string | undefined>(undefined);
 
-  // Stable callback: children call it inside effects.
   const handleSettingsUpdate = useCallback((d: PrintSettingsUpdate) => setPrint(d), []);
 
-  /* ---------- helpers ---------- */
   const clearPrepared = useCallback(() => {
     if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     previewUrlRef.current = undefined;
@@ -120,10 +115,9 @@ export default function CSCPrintPage({ params }: { params: Promise<{ slug: strin
     setReceipt(null);
   }, [clearPrepared]);
 
-  /* ---------- picking files ---------- */
   const handlePick = (kind: DocType) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const list = Array.from(e.target.files ?? []);
-    e.target.value = ""; // lets the customer pick the same file again
+    e.target.value = ""; 
     if (list.length === 0) return;
 
     const problems: string[] = [];
@@ -166,7 +160,6 @@ export default function CSCPrintPage({ params }: { params: Promise<{ slug: strin
     if (next.length === 0) resetAll();
   };
 
-  /* ---------- step transitions ---------- */
   const goToReview = async () => {
     if (!settingsRef.current || !print.isValid || status !== "idle") return;
     setError(null);
@@ -204,8 +197,8 @@ export default function CSCPrintPage({ params }: { params: Promise<{ slug: strin
     fd.append("copies", String(print.copies));
     fd.append("color_mode", print.colorMode);
     fd.append("is_duplex", docType === "FullDocument" && print.isDuplex ? "True" : "False");
-    fd.append("pages", prepared.pagesPerFile[0] ?? "All"); // kept for single-file backends
-    fd.append("pages_per_file", JSON.stringify(prepared.pagesPerFile)); // one entry per file, same order
+    fd.append("pages", prepared.pagesPerFile[0] ?? "All");
+    fd.append("pages_per_file", JSON.stringify(prepared.pagesPerFile)); 
 
     try {
       const data = await uploadOrder(fd, setProgress);
@@ -224,77 +217,99 @@ export default function CSCPrintPage({ params }: { params: Promise<{ slug: strin
     }
   };
 
-  /* ---------- render ---------- */
   const showSettings = (step === 2 || step === 3) && docType && files.length > 0;
   const busy = status !== "idle";
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center py-6 px-4 font-sans text-gray-800">
+    <div className="min-h-screen bg-gray-50/50 flex flex-col items-center py-6 px-4 font-sans text-gray-800 selection:bg-blue-100">
+      
       {/* HEADER */}
-      <div className="w-full max-w-md flex items-center justify-between mb-6">
+      <div className="w-full max-w-md flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-blue-700 flex items-center">
-            <Printer className="w-6 h-6 mr-2" /> SmartPrint
+          <h1 className="text-2xl font-extrabold text-blue-700 flex items-center tracking-tight">
+            <Printer className="w-6 h-6 mr-2" strokeWidth={2.5} /> SmartPrint
           </h1>
-          <p className="text-xs text-gray-500 font-medium">KIOSK ID: {cscSlug.toUpperCase()}</p>
+          <p className="text-[11px] text-gray-500 font-bold tracking-wider mt-0.5">KIOSK ID: <span className="text-gray-700">{cscSlug.toUpperCase()}</span></p>
         </div>
         <div className="text-right">
-          <div className="flex space-x-1 justify-end mb-1">
+          <div className="flex space-x-1.5 justify-end mb-1.5">
             {[1, 2, 3, 4].map((s) => (
-              <div key={s} className={`w-3 h-3 rounded-full ${step >= s ? (s === 4 ? "bg-green-500" : "bg-blue-600") : "bg-gray-300"}`} />
+              <div key={s} className={`w-2.5 h-2.5 rounded-full transition-colors duration-300 ${step >= s ? (s === 4 ? "bg-green-500" : "bg-blue-600") : "bg-gray-200"}`} />
             ))}
           </div>
-          <p className="text-[11px] text-gray-500 font-medium">{STEP_LABELS[step - 1]}</p>
+          <p className="text-[11px] text-gray-500 font-semibold tracking-wide uppercase">{STEP_LABELS[step - 1]}</p>
         </div>
       </div>
 
-      {/* Hidden pickers: one per mode, clicked directly from the tap (works on iOS Safari) */}
       <input type="file" multiple accept="image/jpeg,image/png,image/webp" className="hidden" ref={idInputRef} onChange={handlePick("IDCard")} />
       <input type="file" multiple accept="application/pdf,image/jpeg,image/png,image/webp" className="hidden" ref={docInputRef} onChange={handlePick("FullDocument")} />
 
-      <div className="bg-white w-full max-w-md rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-white w-full max-w-md rounded-[1.5rem] shadow-sm ring-1 ring-gray-100 overflow-hidden relative">
+        
         {error && step !== 4 && (
-          <div className="px-6 pt-6">
+          <div className="px-6 pt-6 animate-in slide-in-from-top-2 duration-300">
             <Banner tone="error">
-              <span className="whitespace-pre-line">{error}</span>
+              <span className="whitespace-pre-line text-sm font-medium">{error}</span>
             </Banner>
           </div>
         )}
 
         {/* STEP 1: CHOOSE */}
         {step === 1 && (
-          <div className="p-6 animate-in fade-in duration-300">
-            <div className="text-center mb-6">
-              <h2 className="text-xl font-bold text-gray-800">What do you want to print?</h2>
-              <p className="text-sm text-gray-500 mt-1">क्या प्रिंट करना है?</p>
+          <div className="p-7 animate-in fade-in duration-300">
+            <div className="text-center mb-8">
+              <h2 className="text-xl font-bold text-gray-900 tracking-tight">What do you want to print?</h2>
+              <p className="text-sm text-gray-500 mt-1.5 font-medium">Select a document type to begin</p>
             </div>
+            
             <div className="space-y-4">
-              <button type="button" onClick={() => idInputRef.current?.click()} className="w-full text-left border-2 rounded-2xl p-4 flex items-center hover:border-blue-500 hover:bg-blue-50 active:scale-[0.98] transition-all">
-                <CreditCard className="w-8 h-8 text-blue-600 mr-4 flex-shrink-0" />
-                <div>
-                  <h3 className="font-bold">ID card / photo</h3>
-                  <p className="text-xs text-gray-500">Aadhaar, PAN, Voter ID. Front and back on one sheet.</p>
-                  <p className="text-xs text-gray-400">आधार, पैन, फोटो</p>
+              
+              {/* Soft styled button for ID Card */}
+              <button 
+                type="button" 
+                onClick={() => idInputRef.current?.click()} 
+                className="group w-full text-left bg-white p-5 rounded-2xl flex items-center ring-1 ring-gray-200 hover:ring-2 hover:ring-blue-500 shadow-sm hover:shadow-md hover:bg-blue-50/40 active:scale-[0.98] transition-all duration-200 cursor-pointer"
+              >
+                <div className="w-14 h-14 bg-blue-100/70 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-blue-600 transition-colors duration-200">
+                  <CreditCard className="w-7 h-7 text-blue-600 group-hover:text-white transition-colors duration-200" strokeWidth={2} />
                 </div>
-              </button>
-              <button type="button" onClick={() => docInputRef.current?.click()} className="w-full text-left border-2 rounded-2xl p-4 flex items-center hover:border-blue-500 hover:bg-blue-50 active:scale-[0.98] transition-all">
-                <FileText className="w-8 h-8 text-green-600 mr-4 flex-shrink-0" />
-                <div>
-                  <h3 className="font-bold">Full document</h3>
-                  <p className="text-xs text-gray-500">PDFs, marksheets, forms. Choose which pages.</p>
-                  <p className="text-xs text-gray-400">PDF, मार्कशीट, फॉर्म</p>
+                <div className="ml-4 flex-1">
+                  <h3 className="font-bold text-gray-900 text-[15px]">ID Card / Photo</h3>
+                  <p className="text-[13px] text-gray-500 mt-0.5 font-medium leading-snug">Upload front & back photos.<br/>We will arrange them on one A4 sheet.</p>
                 </div>
+                <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-blue-500 transition-colors" strokeWidth={2.5} />
               </button>
+
+              {/* Soft styled button for Full Document */}
+              <button 
+                type="button" 
+                onClick={() => docInputRef.current?.click()} 
+                className="group w-full text-left bg-white p-5 rounded-2xl flex items-center ring-1 ring-gray-200 hover:ring-2 hover:ring-green-500 shadow-sm hover:shadow-md hover:bg-green-50/40 active:scale-[0.98] transition-all duration-200 cursor-pointer"
+              >
+                <div className="w-14 h-14 bg-green-100/70 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-green-600 transition-colors duration-200">
+                  <FileText className="w-7 h-7 text-green-600 group-hover:text-white transition-colors duration-200" strokeWidth={2} />
+                </div>
+                <div className="ml-4 flex-1">
+                  <h3 className="font-bold text-gray-900 text-[15px]">Full Document</h3>
+                  <p className="text-[13px] text-gray-500 mt-0.5 font-medium leading-snug">PDFs, Marksheets, or Notes.<br/>Print full A4 size pages.</p>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-green-500 transition-colors" strokeWidth={2.5} />
+              </button>
+
             </div>
-            <p className="text-xs text-gray-400 text-center mt-6">Files up to {MAX_FILE_MB} MB. You pay the operator at the counter.</p>
+
+            <div className="mt-8 flex items-start justify-center gap-2 text-center bg-gray-50 rounded-xl p-3 ring-1 ring-gray-100">
+              <UploadCloud className="w-4 h-4 text-gray-400 mt-0.5" />
+              <p className="text-xs text-gray-500 font-medium">Files up to {MAX_FILE_MB} MB are supported.<br/>Pay the operator directly at the counter.</p>
+            </div>
           </div>
         )}
 
-        {/* STEP 2 + 3 share one mounted settings screen, so edits are never lost when going back */}
+        {/* STEP 2 + 3 */}
         {showSettings && (
           <div className={step === 2 ? "p-6 animate-in slide-in-from-right-8 duration-300" : "hidden"}>
-            <button type="button" onClick={resetAll} className="flex items-center text-sm text-gray-500 mb-5 hover:text-gray-800">
-              <ArrowLeft className="w-4 h-4 mr-1" /> Start over
+            <button type="button" onClick={resetAll} className="flex items-center text-sm font-semibold text-gray-500 mb-6 hover:text-gray-800 transition-colors px-2 py-1 -ml-2 rounded-lg hover:bg-gray-100">
+              <ArrowLeft className="w-4 h-4 mr-1.5" strokeWidth={2.5} /> Change document type
             </button>
 
             {docType === "IDCard" ? (
@@ -315,24 +330,24 @@ export default function CSCPrintPage({ params }: { params: Promise<{ slug: strin
               />
             )}
 
-            <div className="mt-6">
-              <div className="flex items-baseline justify-between mb-3 px-1">
-                <span className="text-sm text-gray-500">Estimated total</span>
-                <span className="text-2xl font-black text-gray-800">₹{print.totalAmount}</span>
+            <div className="mt-8 pt-6 border-t border-gray-100">
+              <div className="flex items-end justify-between mb-4 px-1">
+                <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Estimated total</span>
+                <span className="text-3xl font-black text-gray-900 tracking-tight">₹{print.totalAmount}</span>
               </div>
               <button
                 type="button"
                 onClick={goToReview}
                 disabled={!print.isValid || busy}
-                className="w-full py-4 rounded-2xl font-bold text-white shadow-lg transition-all flex items-center justify-center bg-blue-600 hover:bg-blue-700 active:scale-95 disabled:bg-blue-300 disabled:shadow-none disabled:active:scale-100"
+                className="w-full py-4 rounded-2xl font-bold text-white shadow-[0_4px_14px_0_rgba(37,99,235,0.39)] transition-all flex items-center justify-center bg-blue-600 hover:bg-blue-700 active:scale-[0.98] disabled:bg-gray-300 disabled:shadow-none disabled:active:scale-100 disabled:text-gray-500"
               >
                 {status === "preparing" ? (
                   <>
-                    <Loader2 className="w-5 h-5 mr-2 animate-spin" /> Preparing your print…
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" /> Preparing print preview…
                   </>
                 ) : (
                   <>
-                    Review <ChevronRight className="w-5 h-5 ml-1" />
+                    Review & Continue <ChevronRight className="w-5 h-5 ml-1" strokeWidth={2.5} />
                   </>
                 )}
               </button>
@@ -343,92 +358,94 @@ export default function CSCPrintPage({ params }: { params: Promise<{ slug: strin
         {/* STEP 3: REVIEW */}
         {step === 3 && prepared && docType && (
           <div className="p-6 animate-in slide-in-from-right-8 duration-300">
-            <button type="button" onClick={backToSettings} disabled={busy} className="flex items-center text-sm text-gray-500 mb-5 hover:text-gray-800 disabled:opacity-50">
-              <ArrowLeft className="w-4 h-4 mr-1" /> Edit settings
+            <button type="button" onClick={backToSettings} disabled={busy} className="flex items-center text-sm font-semibold text-gray-500 mb-6 hover:text-gray-800 transition-colors px-2 py-1 -ml-2 rounded-lg hover:bg-gray-100 disabled:opacity-50">
+              <ArrowLeft className="w-4 h-4 mr-1.5" strokeWidth={2.5} /> Edit settings
             </button>
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Review your print</h2>
+            
+            <h2 className="text-xl font-bold text-gray-900 mb-5 tracking-tight">Review your print</h2>
 
             {prepared.previewUrl && (
-              <div className="bg-gray-200 p-3 rounded-2xl border border-gray-300 mb-5 flex justify-center">
+              <div className="bg-gray-100 p-4 rounded-2xl ring-1 ring-gray-200 mb-6 flex justify-center shadow-inner">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={prepared.previewUrl} alt="Final A4 sheet" className="bg-white shadow-md w-48 aspect-[210/297] object-contain" />
+                <img src={prepared.previewUrl} alt="Final A4 sheet" className="bg-white shadow-sm w-48 aspect-[210/297] object-contain ring-1 ring-gray-200/50" />
               </div>
             )}
 
-            <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 mb-5 text-sm">
+            <div className="bg-gray-50 ring-1 ring-gray-200 rounded-2xl p-5 mb-6 text-sm">
               {prepared.items.map((it, i) => (
-                <div key={i} className="flex justify-between gap-3 py-2 border-b border-gray-200">
-                  <span className="text-gray-700 font-medium truncate">{it.name}</span>
-                  <span className="font-semibold text-gray-800 whitespace-nowrap">{it.detail}</span>
+                <div key={i} className="flex justify-between gap-4 py-2.5 border-b border-gray-200 last:border-0">
+                  <span className="text-gray-600 font-medium truncate">{it.name}</span>
+                  <span className="font-semibold text-gray-900 whitespace-nowrap">{it.detail}</span>
                 </div>
               ))}
-              <div className="flex justify-between py-2 border-b border-gray-200">
-                <span className="text-gray-500">Pages per copy</span>
-                <span className="font-semibold">{print.totalPages}</span>
+              <div className="flex justify-between py-2.5 border-b border-gray-200">
+                <span className="text-gray-600 font-medium">Pages per copy</span>
+                <span className="font-bold text-gray-900">{print.totalPages}</span>
               </div>
-              <div className="flex justify-between py-2 border-b border-gray-200">
-                <span className="text-gray-500">Copies</span>
-                <span className="font-semibold">{print.copies}</span>
+              <div className="flex justify-between py-2.5 border-b border-gray-200">
+                <span className="text-gray-600 font-medium">Copies</span>
+                <span className="font-bold text-gray-900">{print.copies}</span>
               </div>
-              <div className="flex justify-between py-2 border-b border-gray-200">
-                <span className="text-gray-500">Color</span>
-                <span className="font-semibold">{print.colorMode === "B&W" ? "Black & White" : "Color"}</span>
+              <div className="flex justify-between py-2.5 border-b border-gray-200">
+                <span className="text-gray-600 font-medium">Color Mode</span>
+                <span className="font-bold text-gray-900 bg-white px-2 py-0.5 rounded ring-1 ring-gray-200">{print.colorMode === "B&W" ? "Black & White" : "Color"}</span>
               </div>
               {docType === "FullDocument" && (
-                <div className="flex justify-between py-2">
-                  <span className="text-gray-500">Sides</span>
-                  <span className="font-semibold">{print.isDuplex ? "Both sides" : "One side"}</span>
+                <div className="flex justify-between py-2.5">
+                  <span className="text-gray-600 font-medium">Print Layout</span>
+                  <span className="font-bold text-gray-900">{print.isDuplex ? "Both sides" : "One side"}</span>
                 </div>
               )}
             </div>
 
-            <div className="flex items-baseline justify-between mb-4 px-1">
-              <span className="text-sm text-gray-500">Amount to pay at counter</span>
-              <span className="text-3xl font-black text-green-600">₹{print.totalAmount}</span>
+            <div className="flex items-end justify-between mb-5 px-1">
+              <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Amount to pay</span>
+              <span className="text-3xl font-black text-green-600 tracking-tight">₹{print.totalAmount}</span>
             </div>
 
             <button
               type="button"
               onClick={handleSubmit}
               disabled={busy}
-              className="relative w-full py-4 rounded-2xl font-bold text-white shadow-lg bg-green-600 hover:bg-green-700 flex justify-center items-center overflow-hidden active:scale-95 disabled:cursor-wait disabled:active:scale-100"
+              className="relative w-full py-4 rounded-2xl font-bold text-white shadow-[0_4px_14px_0_rgba(22,163,74,0.39)] bg-green-600 hover:bg-green-700 flex justify-center items-center overflow-hidden active:scale-[0.98] disabled:cursor-wait disabled:active:scale-100 transition-all"
             >
-              {status === "uploading" && <span className="absolute inset-y-0 left-0 bg-green-800/40 transition-all" style={{ width: `${progress}%` }} />}
+              {status === "uploading" && <span className="absolute inset-y-0 left-0 bg-green-800/20 transition-all duration-300" style={{ width: `${progress}%` }} />}
               <span className="relative flex items-center">
                 {status === "uploading" ? (
                   <>
-                    <Loader2 className="w-5 h-5 mr-2 animate-spin" /> Sending… {progress}%
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" /> Sending to printer… {progress}%
                   </>
                 ) : (
-                  <>Confirm &amp; send to printer</>
+                  <>Confirm & Send to Printer</>
                 )}
               </span>
             </button>
-            {status === "uploading" && <p className="text-xs text-gray-400 text-center mt-2">Please keep this page open.</p>}
+            {status === "uploading" && <p className="text-xs text-gray-400 font-medium text-center mt-3 animate-pulse">Please do not close this page.</p>}
           </div>
         )}
 
         {/* STEP 4: DONE */}
         {step === 4 && receipt && (
-          <div className="p-8 text-center animate-in zoom-in-95 duration-500">
-            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="w-10 h-10 text-green-600" />
+          <div className="p-8 text-center animate-in zoom-in-95 duration-500 flex flex-col items-center">
+            <div className="w-24 h-24 bg-green-50 rounded-full flex items-center justify-center mb-5 ring-8 ring-green-50/50">
+              <CheckCircle className="w-12 h-12 text-green-500" strokeWidth={2.5} />
             </div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-1">Order sent!</h2>
-            <p className="text-gray-500 text-sm mb-6">Tell the operator your Order ID and pay at the counter.</p>
+            <h2 className="text-2xl font-extrabold text-gray-900 mb-2 tracking-tight">Order sent successfully!</h2>
+            <p className="text-gray-500 text-sm mb-8 font-medium">Please tell the operator your Order ID<br/>and pay at the counter.</p>
 
-            <div className="bg-gray-50 rounded-2xl p-5 border border-gray-100 mb-6 space-y-3 text-left">
-              <div className="flex justify-between items-center border-b pb-3 border-gray-200">
-                <span className="text-gray-500 text-sm">Order ID</span>
-                <span className="font-mono font-bold text-gray-800 text-lg">{receipt.orderId}</span>
+            <div className="w-full bg-white ring-1 ring-gray-200 shadow-sm rounded-2xl p-6 mb-8 text-left relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-1 h-full bg-green-500" />
+              <div className="flex justify-between items-center border-b border-gray-100 pb-4 mb-4">
+                <span className="text-gray-500 text-sm font-semibold uppercase tracking-wider">Order ID</span>
+                <span className="font-mono font-bold text-gray-900 text-xl tracking-tight">{receipt.orderId}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-gray-500 text-sm">Amount to pay</span>
-                <span className="text-3xl font-black text-green-600">₹{receipt.amount}</span>
+                <span className="text-gray-500 text-sm font-semibold uppercase tracking-wider">Amount to pay</span>
+                <span className="text-4xl font-black text-green-600 tracking-tight">₹{receipt.amount}</span>
               </div>
             </div>
 
-            <button type="button" onClick={resetAll} className="w-full py-4 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-2xl transition-colors active:scale-95">
+            <button type="button" onClick={resetAll} className="w-full py-4 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-2xl transition-colors active:scale-[0.98]">
               Print another document
             </button>
           </div>

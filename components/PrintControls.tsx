@@ -9,15 +9,15 @@ import { MAX_COPIES, RATE_PER_PAGE, type ColorMode } from "../utils/printLogic";
 
 export function SectionTitle({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
-    <h3 className="font-bold text-gray-800 mb-4 flex items-center">
-      <span className="mr-2 text-blue-600 flex">{icon}</span>
+    <h3 className="font-bold text-gray-900 mb-5 flex items-center tracking-tight text-[17px]">
+      <span className="mr-2.5 text-blue-600 flex">{icon}</span>
       {children}
     </h3>
   );
 }
 
 export function FieldLabel({ children }: { children: ReactNode }) {
-  return <label className="text-sm font-semibold text-gray-700 block mb-2">{children}</label>;
+  return <label className="text-[12px] font-bold text-gray-500 block mb-2.5 uppercase tracking-wider">{children}</label>;
 }
 
 interface SegmentedOption<T extends string> {
@@ -37,7 +37,7 @@ export function Segmented<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
+    <div className="flex bg-gray-100/80 p-1.5 rounded-xl ring-1 ring-gray-200/50 shadow-inner">
       {options.map((o) => {
         const active = o.value === value;
         return (
@@ -46,14 +46,14 @@ export function Segmented<T extends string>({
             type="button"
             disabled={o.disabled}
             onClick={() => onChange(o.value)}
-            className={`py-2.5 px-2 rounded-xl text-sm font-semibold border transition-all active:scale-95 disabled:opacity-50 ${
+            className={`flex-1 py-2.5 px-2 rounded-lg text-sm font-semibold transition-all duration-200 active:scale-[0.98] disabled:opacity-50 flex flex-col items-center justify-center ${
               active
-                ? "bg-blue-50 border-blue-500 text-blue-700 ring-1 ring-blue-500"
-                : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+                ? "bg-white text-gray-900 shadow-sm ring-1 ring-gray-200/50"
+                : "text-gray-500 hover:text-gray-700"
             }`}
           >
             <span className="flex items-center justify-center">{o.label}</span>
-            {o.sub && <span className="block text-[10px] font-normal text-gray-400 mt-0.5">{o.sub}</span>}
+            {o.sub && <span className={`block text-[10px] font-medium mt-0.5 ${active ? "text-gray-500" : "text-gray-400"}`}>{o.sub}</span>}
           </button>
         );
       })}
@@ -75,32 +75,32 @@ export function Banner({
   }[tone];
   const Icon = tone === "info" ? Info : tone === "warn" ? AlertTriangle : AlertCircle;
   return (
-    <div className={`flex items-start text-sm font-medium px-3 py-2.5 rounded-xl border ${styles}`} role={tone === "error" ? "alert" : undefined}>
-      <Icon className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" />
-      <div className="min-w-0">{children}</div>
+    <div className={`flex items-start text-sm font-medium px-3.5 py-3 rounded-xl border ${styles}`} role={tone === "error" ? "alert" : undefined}>
+      <Icon className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" strokeWidth={2.5} />
+      <div className="min-w-0 leading-snug">{children}</div>
     </div>
   );
 }
 
 export function CopiesStepper({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
-    <div className="flex items-center justify-between border border-gray-300 rounded-xl p-1 bg-white">
+    <div className="flex items-center justify-between border-0 ring-1 ring-gray-200 shadow-sm rounded-2xl p-1.5 bg-white">
       <button
         type="button"
         aria-label="Fewer copies"
         onClick={() => onChange(Math.max(1, value - 1))}
-        className="w-12 h-11 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-600 flex items-center justify-center active:scale-95"
+        className="w-12 h-11 bg-gray-50 hover:bg-gray-100 rounded-xl text-gray-600 flex items-center justify-center active:scale-95 transition-colors"
       >
-        <Minus className="w-4 h-4" />
+        <Minus className="w-5 h-5" strokeWidth={2.5} />
       </button>
-      <span className="font-bold text-lg tabular-nums">{value}</span>
+      <span className="font-black text-xl text-gray-900 tabular-nums">{value}</span>
       <button
         type="button"
         aria-label="More copies"
         onClick={() => onChange(Math.min(MAX_COPIES, value + 1))}
-        className="w-12 h-11 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-600 flex items-center justify-center active:scale-95"
+        className="w-12 h-11 bg-gray-50 hover:bg-gray-100 rounded-xl text-gray-600 flex items-center justify-center active:scale-95 transition-colors"
       >
-        <Plus className="w-4 h-4" />
+        <Plus className="w-5 h-5" strokeWidth={2.5} />
       </button>
     </div>
   );
@@ -119,9 +119,9 @@ export function CommonPrintOptions({
   onCopies: (v: number) => void;
 }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div>
-        <FieldLabel>Print color</FieldLabel>
+        <FieldLabel>Print Color</FieldLabel>
         <Segmented<ColorMode>
           value={colorMode}
           onChange={onColorMode}
@@ -132,7 +132,7 @@ export function CommonPrintOptions({
         />
       </div>
       <div>
-        <FieldLabel>Copies</FieldLabel>
+        <FieldLabel>Number of Copies</FieldLabel>
         <CopiesStepper value={copies} onChange={onCopies} />
       </div>
     </div>
