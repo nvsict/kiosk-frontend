@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle, ChevronRight, CreditCard, FileText, Loader2, Printer, UploadCloud } from "lucide-react";
+import { ArrowLeft, CheckCircle, ChevronRight, CreditCard, FileText, Loader2, Printer, UploadCloud, AlertCircle } from "lucide-react";
 import ImageSettings from "../../../components/ImageSettings";
 import FullPageSettings from "../../../components/FullPageSettings";
 import { Banner } from "../../../components/PrintControls";
@@ -17,7 +17,9 @@ import {
   type PrintSettingsUpdate,
 } from "../../../utils/printLogic";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL && process.env.NEXT_PUBLIC_API_URL !== "" 
+  ? process.env.NEXT_PUBLIC_API_URL 
+  : "http://187.127.135.23:8005";
 const UPLOAD_URL = `${API_BASE}/api/orders/upload`;
 
 type DocType = "IDCard" | "FullDocument";
@@ -89,6 +91,11 @@ export default function CSCPrintPage({ params }: { params: Promise<{ slug: strin
     duplexSupported: boolean;
   } | null>(null);
 
+  // New States for Offline Mode & Shop Name
+  const [isShopActive, setIsShopActive] = useState<boolean | null>(null);
+  const [shopMessage, setShopMessage] = useState<string>("");
+  const [shopName, setShopName] = useState<string>("");
+
   const settingsRef = useRef<PrintSettingsHandle>(null);
   const idCounter = useRef(0);
   const idInputRef = useRef<HTMLInputElement>(null);
@@ -108,6 +115,10 @@ export default function CSCPrintPage({ params }: { params: Promise<{ slug: strin
     fetch(`${API_BASE}/api/csc/${cscSlug}`)
       .then(res => res.json())
       .then(data => {
+        setIsShopActive(data.active);
+        if (data.message) setShopMessage(data.message);
+        if (data.name) setShopName(data.name);
+
         if (data.active) {
           setShopSettings({
             bwRate: data.pricing?.["B&W"] ?? 2.0,
@@ -116,7 +127,11 @@ export default function CSCPrintPage({ params }: { params: Promise<{ slug: strin
           });
         }
       })
-      .catch(err => console.error("Could not fetch shop settings", err));
+      .catch(err => {
+        console.error("Could not fetch shop settings", err);
+        setIsShopActive(false);
+        setShopMessage("Could not connect to the server.");
+      });
   }, [cscSlug]);
 
   useEffect(
@@ -252,7 +267,10 @@ export default function CSCPrintPage({ params }: { params: Promise<{ slug: strin
           <h1 className="text-2xl font-extrabold text-blue-700 flex items-center tracking-tight">
             <Printer className="w-6 h-6 mr-2" strokeWidth={2.5} /> SmartPrint
           </h1>
-          <p className="text-[11px] text-gray-500 font-bold tracking-wider mt-0.5">KIOSK ID: <span className="text-gray-700">{cscSlug.toUpperCase()}</span></p>
+          {/* Display Shop Name instead of ugly Slug if available */}
+          <p className="text-[11px] text-gray-500 font-bold tracking-wider mt-0.5 uppercase">
+            {shopName ? shopName : `KIOSK ID: ${cscSlug}`}
+          </p>
         </div>
         <div className="text-right">
           <div className="flex space-x-1.5 justify-end mb-1.5">
@@ -264,10 +282,31 @@ export default function CSCPrintPage({ params }: { params: Promise<{ slug: strin
         </div>
       </div>
 
-      <input type="file" multiple accept="image/jpeg,image/png,image/webp" className="hidden" ref={idInputRef} onChange={handlePick("IDCard")} />
-      <input type="file" multiple accept="application/pdf,image/jpeg,image/png,image/webp" className="hidden" ref={docInputRef} onChange={handlePick("FullDocument")} />
+      <input type="file" multiple accept="image/jpeg,image/png,image/webp" className="hidden" ref={idInputRef} onChange={handlePick("IDCard")} disabled={!isShopActive} />
+      <input type="file" multiple accept="application/pdf,image/jpeg,image/png,image/webp" className="hidden" ref={docInputRef} onChange={handlePick("FullDocument")} disabled={!isShopActive} />
 
-      <div className="bg-white w-full max-w-md rounded-[1.5rem] shadow-sm ring-1 ring-gray-100 overflow-hidden relative">
+      {/* Loading State */}
+      {isShopActive === null ? (
+        <div className="bg-white w-full max-w-md rounded-[1.5rem] shadow-sm ring-1 ring-gray-100 p-10 flex flex-col items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-500 mb-4" />
+          <p className="text-gray-500 font-medium animate-pulse">Connecting to kiosk...</p>
+        </div>
+      ) : isShopActive === false ? (
+        
+        // Offline State
+        <div className="bg-white w-full max-w-md rounded-[1.5rem] shadow-sm ring-1 ring-gray-100 p-10 flex flex-col items-center justify-center text-center animate-in zoom-in-95 duration-300">
+          <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mb-5 ring-8 ring-red-50/50">
+            <AlertCircle className="w-10 h-10 text-red-500" strokeWidth={2.5} />
+          </div>
+          <h2 className="text-2xl font-extrabold text-gray-900 mb-2 tracking-tight">Kiosk Offline</h2>
+          <p className="text-gray-500 font-medium leading-snug">
+            {shopMessage || "The operator's computer is currently turned off or not accepting orders."}
+          </p>
+        </div>
+      ) : (
+
+        // Online State
+        <div className="bg-white w-full max-w-md rounded-[1.5rem] shadow-sm ring-1 ring-gray-100 overflow-hidden relative">
         
         {error && step !== 4 && (
           <div className="px-6 pt-6 animate-in slide-in-from-top-2 duration-300">
@@ -474,7 +513,9 @@ export default function CSCPrintPage({ params }: { params: Promise<{ slug: strin
             </button>
           </div>
         )}
+
       </div>
+      )}
     </div>
   );
 }
